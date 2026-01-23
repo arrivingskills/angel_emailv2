@@ -1,0 +1,29 @@
+[project]
+name = "angel-email"
+version = "0.1.0"
+description = "Gmail label-based downloader that saves .eml files and parses them into SQLite"
+readme = "README.md"
+authors = [
+    { name = "Andy Miles", email = "andy@proquickly.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "google-api-python-client>=2.147.0",
+    "google-auth-oauthlib>=1.2.1",
+    "google-auth-httplib2>=0.2.0",
+]
+
+[project.scripts]
+angel-email = "angel_email:main"
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "angel-email",
+]
+
+[tool.uv.sources]
+angel-email = { workspace = true }

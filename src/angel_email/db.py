@@ -1,0 +1,179 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+SCHEMA = {
+    "emails": (
+        """
+        CREATE TABLE IF NOT EXISTS emails (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gmail_id TEXT UNIQUE,
+            thread_id TEXT,
+            message_id TEXT,
+            subject TEXT,
+            from_addr TEXT,
+            to_addrs TEXT,
+            cc_addrs TEXT,
+            bcc_addrs TEXT,
+            date TEXT,
+            snippet TEXT,
+            text_body TEXT,
+            html_body TEXT,
+            headers_json TEXT,
+            raw_eml_path TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    ),
+    "attachments": (
+        """
+        CREATE TABLE IF NOT EXISTS attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            content_type TEXT,
+            size INTEGER,
+            file_path TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id);
+        """
+    ),
+    "email_labels": (
+        """
+        CREATE TABLE IF NOT EXISTS email_labels (
+            email_id INTEGER NOT NULL,
+            label_name TEXT NOT NULL,
+            label_id TEXT NOT NULL,
+            PRIMARY KEY (email_id, label_name),
+            FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_email_labels_label_name ON email_labels(label_name);
+        """
+    ),
+}
+
+
+def connect(db_path: Path) -> sqlite3.Connection:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
+    return conn
+
+
+def init_db(conn: sqlite3.Connection) -> None:
+    for _, ddl in SCHEMA.items():
+        conn.executescript(ddl)
+    conn.commit()
+
+
+def upsert_email(
+    conn: sqlite3.Connection,
+    *,
+    gmail_id: str,
+    thread_id: Optional[str],
+    message_id: Optional[str],
+    subject: Optional[str],
+    from_addr: Optional[str],
+    to_addrs: Optional[str],
+    cc_addrs: Optional[str],
+    bcc_addrs: Optional[str],
+    date: Optional[str],
+    snippet: Optional[str],
+    text_body: Optional[str],
+    html_body: Optional[str],
+    headers: Optional[Dict[str, Any]],
+    raw_eml_path: Path,
+) -> None:
+    headers_json = json.dumps(headers or {}, ensure_ascii=False)
+    conn.execute(
+        """
+        INSERT INTO emails (
+            gmail_id, thread_id, message_id, subject, from_addr, to_addrs, cc_addrs, bcc_addrs,
+            date, snippet, text_body, html_body, headers_json, raw_eml_path
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(gmail_id) DO UPDATE SET
+            thread_id=excluded.thread_id,
+            message_id=excluded.message_id,
+            subject=excluded.subject,
+            from_addr=excluded.from_addr,
+            to_addrs=excluded.to_addrs,
+            cc_addrs=excluded.cc_addrs,
+            bcc_addrs=excluded.bcc_addrs,
+            date=excluded.date,
+            snippet=excluded.snippet,
+            text_body=excluded.text_body,
+            html_body=excluded.html_body,
+            headers_json=excluded.headers_json,
+            raw_eml_path=excluded.raw_eml_path
+        ;
+        """,
+        (
+            gmail_id,
+            thread_id,
+            message_id,
+            subject,
+            from_addr,
+            to_addrs,
+            cc_addrs,
+            bcc_addrs,
+            date,
+            snippet,
+            text_body,
+            html_body,
+            headers_json,
+            str(raw_eml_path),
+        ),
+    )
+    conn.commit()
+
+
+def get_email_id_by_gmail_id(conn: sqlite3.Connection, gmail_id: str) -> Optional[int]:
+    """Get the internal email id from gmail_id."""
+    cursor = conn.execute("SELECT id FROM emails WHERE gmail_id = ?", (gmail_id,))
+    row = cursor.fetchone()
+    return row[0] if row else None
+
+
+def insert_attachment(
+    conn: sqlite3.Connection,
+    *,
+    email_id: int,
+    filename: str,
+    content_type: str,
+    size: int,
+    file_path: Path,
+) -> None:
+    """Insert attachment metadata into the attachments table."""
+    conn.execute(
+        """
+        INSERT INTO attachments (email_id, filename, content_type, size, file_path)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (email_id, filename, content_type, size, str(file_path)),
+    )
+
+
+def insert_email_labels(
+    conn: sqlite3.Connection,
+    *,
+    email_id: int,
+    labels: List[tuple[str, str]],
+) -> None:
+    """Insert label associations for an email. labels is list of (label_name, label_id) tuples."""
+    # First, remove existing labels for this email
+    conn.execute("DELETE FROM email_labels WHERE email_id = ?", (email_id,))
+    # Insert new labels
+    for label_name, label_id in labels:
+        conn.execute(
+            """
+            INSERT INTO email_labels (email_id, label_name, label_id)
+            VALUES (?, ?, ?)
+            """,
+            (email_id, label_name, label_id),
+        )
