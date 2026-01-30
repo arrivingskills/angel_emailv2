@@ -140,16 +140,19 @@ def main(argv: Optional[List[str]] = None) -> None:
     label_map = list_labels(service)
     label_id_to_name = {v: k for k, v in label_map.items()}
 
-    # Create or get the "downloaded" label if specified
-    downloaded_label_id = None
-    if args.mark_downloaded:
-        downloaded_label_id = create_label_if_not_exists(service, args.mark_downloaded)
-        print(f"Will mark downloaded emails with label: {args.mark_downloaded}")
+    # Always create/get the "downloaded" label. Default name is '00downloaded',
+    # but the user can override with --mark-downloaded.
+    downloaded_label_name = args.mark_downloaded if args.mark_downloaded else "00downloaded"
+    downloaded_label_id = create_label_if_not_exists(service, downloaded_label_name)
+    print(f"Will mark downloaded emails with label: {downloaded_label_name}")
 
     # Fetch message IDs
     print(f"Listing messages for labels: {', '.join(label_names)}")
+    # Exclude already-downloaded messages so they are not re-downloaded.
+    exclude_q = f"-label:{downloaded_label_name}"
+    combined_q = f"{args.query} {exclude_q}" if args.query else exclude_q
     msg_ids = list_message_ids(
-        service, label_ids=label_ids, max_results=args.max, q=args.query
+        service, label_ids=label_ids, max_results=args.max, q=combined_q
     )
     print(f"Found {len(msg_ids)} messages")
 

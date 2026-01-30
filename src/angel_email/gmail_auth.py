@@ -25,68 +25,58 @@ def load_credentials(credentials_path: Path, token_path: Path) -> Credentials:
     """
     creds: Optional[Credentials] = None
 
+    # Try load existing token if present
     if token_path.exists():
         try:
             creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
         except Exception:
             creds = None
-    
-        # If a token exists, verify it contains the required scopes. If not,
-        # remove it so the user is prompted to re-authorize with expanded scopes.
-        if token_path.exists():
-            try:
-                raw = token_path.read_text()
-                data = json.loads(raw) if raw else {}
-            except Exception:
-                data = {}
 
-            token_scopes = data.get("scopes") or data.get("scope") or []
-            if isinstance(token_scopes, str):
-                # space-separated scopes string
-                token_scopes = token_scopes.split()
-
-            token_scopes_set = set(token_scopes or [])
-            required_scopes_set = set(SCOPES)
-
-            if not required_scopes_set.issubset(token_scopes_set):
-                # Token does not include required scopes; remove it to force re-auth.
-                try:
-                    token_path.unlink()
-                    print(
-                        f"Existing token at {token_path} lacks required scopes; removed to force re-auth."
-                    )
-                except Exception:
-                    print(
-                        f"Warning: failed to remove token at {token_path}; continuing to re-auth."
-                    )
-                creds = None
-            else:
-                try:
-                    creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
-                    print(f"Using existing token at {token_path} with required scopes.")
-                except Exception:
-                    creds = None
-
-        if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except Exception:
-                    print("Warning: failed to refresh token; re-running OAuth flow.")
-                    creds = None
-        if not creds or not creds.valid:
-            # Run local server flow
-            print("Starting local OAuth flow to obtain credentials with required scopes:")
-            for s in SCOPES:
-                print(f"  - {s}")
-            flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(creds.to_json())
+        # Verify token contains required scopes; if not, remove it to force re-auth.
         try:
+            raw = token_path.read_text()
+            data = json.loads(raw) if raw else {}
+        except Exception:
+            data = {}
+
+        token_scopes = data.get("scopes") or data.get("scope") or []
+        if isinstance(token_scopes, str):
+            token_scopes = token_scopes.split()
+
+        token_scopes_set = set(token_scopes or [])
+        if not set(SCOPES).issubset(token_scopes_set):
+            try:
+                token_path.unlink()
+                print(f"Existing token at {token_path} lacks required scopes; removed to force re-auth.")
+            except Exception:
+                print(f"Warning: failed to remove token at {token_path}; continuing to re-auth.")
+            creds = None
+
+    # Try refresh if possible
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+        except Exception:
+            print("Warning: failed to refresh token; will run OAuth flow.")
+            creds = None
+
+    # If we don't have valid creds, run the local server flow
+    if not creds or not creds.valid:
+        if not credentials_path.exists():
+            raise FileNotFoundError(f"Client secrets file not found: {credentials_path}")
+
+        print("Starting local OAuth flow to obtain credentials with required scopes:")
+        for s in SCOPES:
+            print(f"  - {s}")
+        flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+        creds = flow.run_local_server(port=0)
+
+        # Save the credentials for the next run
+        try:
+            token_path.parent.mkdir(parents=True, exist_ok=True)
+            token_path.write_text(creds.to_json())
             print(f"Saved credentials to {token_path}")
         except Exception:
-            pass
+            print(f"Warning: failed to save token to {token_path}")
 
     return creds
