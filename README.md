@@ -7,7 +7,7 @@ SQLite database (`emails/emails.db`).
 
 Features
 
-- OAuth2 login using Google API (read-only scope)
+- OAuth2 login using Google API (read + modify scopes for labeling)
 - List available Gmail labels
 - Download messages filtered by label names (and optional Gmail search query)
 - Save raw `.eml` files organized by label folders (e.g., `./emails/INBOX/`, `./emails/Work/`)
@@ -90,7 +90,7 @@ Table `emails` columns:
 Notes
 
 - The first run will open a browser window to authenticate your Google account
-and consent to the Gmail read-only scope.
+and consent to the required Gmail scopes (read, modify, labels).
 - If you see label not found errors, run `angel-email --list-labels` to
 discover the exact label names.
 - Emails are organized in folders by label name (e.g., `emails/INBOX/`, `emails/Work/`)

@@ -84,6 +84,9 @@ def run_one_scenario(mark_downloaded_arg: str | None):
         def fake_insert_email_labels(conn, email_id, labels):
             recorded_db.setdefault('labels', []).append(labels)
 
+        def fake_delete_attachments_for_email(conn, email_id):
+            recorded_db.setdefault('deleted_attachments', []).append(email_id)
+
         def fake_insert_attachment(*args, **kwargs):
             recorded_db.setdefault('attachments', []).append(True)
 
@@ -108,6 +111,7 @@ def run_one_scenario(mark_downloaded_arg: str | None):
         angel_email.db.upsert_email = fake_upsert_email
         angel_email.db.get_email_id_by_gmail_id = fake_get_email_id_by_gmail_id
         angel_email.db.insert_email_labels = fake_insert_email_labels
+        angel_email.db.delete_attachments_for_email = fake_delete_attachments_for_email
         angel_email.db.insert_attachment = fake_insert_attachment
         angel_email.add_label_to_message = fake_add_label_to_message
 
@@ -121,12 +125,12 @@ def run_one_scenario(mark_downloaded_arg: str | None):
 
 
 def test_default_download_label_exclusion():
+    """Test that without --mark-downloaded, no exclusion query is added and no label is applied."""
     recorded, added = run_one_scenario(None)
-    # ensure query excluded default label name
-    assert recorded['q'] is not None
-    assert "-label:00downloaded" in recorded['q']
-    # ensure we added the downloaded label to the message
-    assert added == [("mid1", "DLID")]
+    # Without --mark-downloaded, there should be no label exclusion query
+    assert recorded['q'] is None
+    # No label should be added to messages
+    assert added == []
 
 
 def test_custom_download_label_name():
@@ -136,8 +140,19 @@ def test_custom_download_label_name():
     assert added == [("mid1", "DLID")]
 
 
+def test_label_with_spaces():
+    """Test that label names with spaces are properly quoted in the query."""
+    recorded, added = run_one_scenario("My Downloaded Label")
+    assert recorded['q'] is not None
+    # Label with spaces should be quoted
+    assert '-label:"My Downloaded Label"' in recorded['q']
+    assert added == [("mid1", "DLID")]
+
+
 if __name__ == "__main__":
     test_default_download_label_exclusion()
     print("default test OK")
     test_custom_download_label_name()
     print("custom test OK")
+    test_label_with_spaces()
+    print("label with spaces test OK")

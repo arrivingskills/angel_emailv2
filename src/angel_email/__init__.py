@@ -15,13 +15,12 @@ from angel_email.gmail_client import (
     get_message_metadata,
     save_eml,
     save_attachment,
+    clear_attachments_dir,
     create_label_if_not_exists,
     add_label_to_message,
 )
-from angel_email.email_parser import parse_eml_bytes, extract_attachments
+from angel_email.email_parser import parse_eml_bytes, extract_attachments, parse_message_object
 from angel_email import db as dbmod
-import email
-from email import policy
 
 
 def project_root() -> Path:
@@ -140,17 +139,22 @@ def main(argv: Optional[List[str]] = None) -> None:
     label_map = list_labels(service)
     label_id_to_name = {v: k for k, v in label_map.items()}
 
-    # Always create/get the "downloaded" label. Default name is '00downloaded',
-    # but the user can override with --mark-downloaded.
-    downloaded_label_name = args.mark_downloaded if args.mark_downloaded else "00downloaded"
-    downloaded_label_id = create_label_if_not_exists(service, downloaded_label_name)
-    print(f"Will mark downloaded emails with label: {downloaded_label_name}")
+    # Only create/get the "downloaded" label if --mark-downloaded is specified
+    downloaded_label_name: str | None = args.mark_downloaded
+    downloaded_label_id: str | None = None
+    if downloaded_label_name:
+        downloaded_label_id = create_label_if_not_exists(service, downloaded_label_name)
+        print(f"Will mark downloaded emails with label: {downloaded_label_name}")
 
     # Fetch message IDs
     print(f"Listing messages for labels: {', '.join(label_names)}")
-    # Exclude already-downloaded messages so they are not re-downloaded.
-    exclude_q = f"-label:{downloaded_label_name}"
-    combined_q = f"{args.query} {exclude_q}" if args.query else exclude_q
+    # Exclude already-downloaded messages so they are not re-downloaded (only if marking is enabled).
+    combined_q = args.query
+    if downloaded_label_name:
+        # Quote label name to handle spaces properly in Gmail query syntax
+        escaped_label = f'"{downloaded_label_name}"' if ' ' in downloaded_label_name else downloaded_label_name
+        exclude_q = f"-label:{escaped_label}"
+        combined_q = f"{args.query} {exclude_q}" if args.query else exclude_q
     msg_ids = list_message_ids(
         service, label_ids=label_ids, max_results=args.max, q=combined_q
     )
@@ -179,10 +183,9 @@ def main(argv: Optional[List[str]] = None) -> None:
 
             # Save .eml file in label folder
             eml_path = save_eml(raw_bytes, label_dir, mid)
-            parsed = parse_eml_bytes(raw_bytes)
-
-            # Parse email message for attachments
-            msg = email.message_from_bytes(raw_bytes, policy=policy.default)
+            
+            # Parse email once and extract all needed data
+            parsed, msg = parse_message_object(raw_bytes)
             attachments = extract_attachments(msg)
 
             # Upsert email data
@@ -218,6 +221,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                         conn, email_id=email_id, labels=label_tuples
                     )
 
+                # Delete existing attachments before re-inserting (handles upsert case)
+                dbmod.delete_attachments_for_email(conn, email_id)
+                clear_attachments_dir(label_dir, mid)
+                
                 # Save attachments to disk and record in DB
                 for attachment in attachments:
                     try:
@@ -251,8 +258,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                 )
         except KeyboardInterrupt:
             print("Interrupted by user")
-            break
+            conn.close()
+            return
         except Exception as e:
             print(f"Error processing message {mid}: {e}")
 
+    conn.close()
     print("Done.")

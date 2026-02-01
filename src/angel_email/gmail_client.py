@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional
 
 from googleapiclient.discovery import build, Resource
 
@@ -108,11 +108,24 @@ def get_message_metadata(service: Resource, msg_id: str) -> dict:
     return resp
 
 
+import shutil
+
+
 def save_eml(raw_bytes: bytes, out_dir: Path, gmail_id: str) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{gmail_id}.eml"
     path.write_bytes(raw_bytes)
     return path
+
+
+def clear_attachments_dir(out_dir: Path, gmail_id: str) -> None:
+    """
+    Remove the attachments directory for a message if it exists.
+    Called before re-saving attachments to avoid orphaned files on re-runs.
+    """
+    attachments_dir = out_dir / "attachments" / gmail_id
+    if attachments_dir.exists():
+        shutil.rmtree(attachments_dir)
 
 
 def save_attachment(

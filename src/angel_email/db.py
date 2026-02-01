@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 SCHEMA = {
     "emails": (
@@ -140,6 +140,12 @@ def get_email_id_by_gmail_id(conn: sqlite3.Connection, gmail_id: str) -> Optiona
     return row[0] if row else None
 
 
+def delete_attachments_for_email(conn: sqlite3.Connection, email_id: int) -> None:
+    """Delete all attachments for an email (used before re-inserting on upsert)."""
+    conn.execute("DELETE FROM attachments WHERE email_id = ?", (email_id,))
+    conn.commit()
+
+
 def insert_attachment(
     conn: sqlite3.Connection,
     *,
@@ -157,13 +163,14 @@ def insert_attachment(
         """,
         (email_id, filename, content_type, size, str(file_path)),
     )
+    conn.commit()
 
 
 def insert_email_labels(
     conn: sqlite3.Connection,
     *,
     email_id: int,
-    labels: List[tuple[str, str]],
+    labels: list[tuple[str, str]],
 ) -> None:
     """Insert label associations for an email. labels is list of (label_name, label_id) tuples."""
     # First, remove existing labels for this email
@@ -177,3 +184,4 @@ def insert_email_labels(
             """,
             (email_id, label_name, label_id),
         )
+    conn.commit()

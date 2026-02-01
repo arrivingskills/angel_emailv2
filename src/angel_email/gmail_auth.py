@@ -69,7 +69,10 @@ def load_credentials(credentials_path: Path, token_path: Path) -> Credentials:
         for s in SCOPES:
             print(f"  - {s}")
         flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
-        creds = flow.run_local_server(port=0)
+        new_creds = flow.run_local_server(port=0)
+        # Cast to the expected type (InstalledAppFlow always returns oauth2 Credentials for Gmail)
+        creds = new_creds  # type: ignore[assignment]
+        assert creds is not None  # Guaranteed by flow.run_local_server
 
         # Save the credentials for the next run
         try:
@@ -79,4 +82,6 @@ def load_credentials(credentials_path: Path, token_path: Path) -> Credentials:
         except Exception:
             print(f"Warning: failed to save token to {token_path}")
 
+    # At this point creds is guaranteed to be valid
+    assert creds is not None, "Failed to obtain credentials"
     return creds

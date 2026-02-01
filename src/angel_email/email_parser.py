@@ -11,6 +11,15 @@ def parse_eml_bytes(raw_bytes: bytes) -> Dict[str, Any]:
     Parse raw RFC822 bytes into a dict with common fields.
     Returns keys: message_id, subject, from_, to, cc, bcc, date, text_body, html_body, headers
     """
+    parsed, _ = parse_message_object(raw_bytes)
+    return parsed
+
+
+def parse_message_object(raw_bytes: bytes) -> Tuple[Dict[str, Any], Message]:
+    """
+    Parse raw RFC822 bytes into a dict with common fields and return the Message object.
+    Returns tuple of (parsed_dict, Message) to allow reuse of the Message for attachment extraction.
+    """
     msg: Message = email.message_from_bytes(raw_bytes, policy=policy.default)
 
     def get_header(name: str) -> Optional[str]:
@@ -24,7 +33,7 @@ def parse_eml_bytes(raw_bytes: bytes) -> Dict[str, Any]:
 
     headers = {k: str(v) for (k, v) in msg.items()}
 
-    return {
+    parsed = {
         "message_id": get_header("Message-ID"),
         "subject": get_header("Subject"),
         "from_": get_header("From"),
@@ -36,6 +45,7 @@ def parse_eml_bytes(raw_bytes: bytes) -> Dict[str, Any]:
         "html_body": html_body,
         "headers": headers,
     }
+    return parsed, msg
 
 
 def extract_bodies(msg: Message) -> Tuple[Optional[str], Optional[str]]:
