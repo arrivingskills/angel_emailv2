@@ -103,6 +103,14 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
     """
     attachments: List[Dict[str, Any]] = []
 
+    # Outlook/Exchange internal metadata filenames that should never be
+    # treated as real attachments.  These MIME parts carry custom form
+    # properties, voting buttons, read-receipt flags, etc.
+    _OUTLOOK_JUNK_PREFIXES = (
+        "EML*OECUSTOMPROPERTY",
+        "EML*OECUSTOMHTML",
+    )
+
     if msg.is_multipart():
         for part in msg.walk():
             # Skip multipart containers
@@ -112,6 +120,13 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
             # Check if this part is an attachment
             content_disposition = part.get("Content-Disposition", "")
             filename = part.get_filename()
+
+            # Skip Outlook/Exchange internal metadata parts
+            if filename and any(
+                filename.upper().startswith(prefix)
+                for prefix in _OUTLOOK_JUNK_PREFIXES
+            ):
+                continue
 
             # Parts with Content-Disposition: attachment or inline with filename
             # or parts with filename in Content-Type are considered attachments

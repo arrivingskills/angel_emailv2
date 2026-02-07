@@ -263,5 +263,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         except Exception as e:
             print(f"Error processing message {mid}: {e}")
 
+    # Export all emails to CSV alongside the database
+    csv_path = db_path.parent / "emails.csv"
+    dbmod.export_csv(conn, csv_path)
+    print(f"Exported emails to {csv_path}")
+
     conn.close()
     print("Done.")

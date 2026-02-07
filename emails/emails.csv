@@ -1,0 +1,102 @@
+gmail_id,thread_id,message_id,subject,from_addr,to_addrs,cc_addrs,bcc_addrs,date,snippet,text_body,html_body,raw_eml_path
+18d4a1b2c3e4f567,18d4a1b2c3e4f567,<CABx+5Og1kR@mail.gmail.com>,Weekly Team Standup Notes,Sarah Connor <sarah.connor@example.com>,andy@example.com,"mike@example.com, lisa@example.com",,2026/01/05 09:15,"Here are the standup notes from this week's meetings...","Hi team,
+
+Here are this week's standup highlights:
+- Backend API migration to v3 is 80% complete
+- Frontend dashboard redesign on track for Feb release
+- QA regression suite updated with 42 new test cases
+
+Action items:
+1. Andy: Review PR #482 by Monday
+2. Mike: Deploy staging build
+3. Lisa: Update API docs
+
+Best,
+Sarah","<html><body><p>Hi team,</p><p>Here are this week's standup highlights...</p></body></html>",emails/INBOX/18d4a1b2c3e4f567.eml
+18d4a2f9e8d7c6b5,18d4a2f9e8d7c6b5,<CAGL+7x2@mail.gmail.com>,Invoice #INV-2026-0042 from Acme Corp,billing@acmecorp.com,andy@example.com,,,2026/01/12 14:30,"Please find attached your invoice for January services...","Dear Customer,
+
+Please find attached Invoice #INV-2026-0042 for services rendered in January 2026.
+
+Amount Due: $4,250.00
+Due Date: February 12, 2026
+Payment Terms: Net 30
+
+You can pay via bank transfer using the details on the attached invoice or through our online portal at https://pay.acmecorp.com
+
+Thank you for your business.
+
+Regards,
+Acme Corp Billing Department","<html><body><p>Dear Customer,</p><p>Please find attached Invoice #INV-2026-0042...</p></body></html>",emails/INBOX/18d4a2f9e8d7c6b5.eml
+18d4b3a8d7c6e5f4,18d4b3a8d7c6e5f4,<MSG-20260118@notifications.github.com>,[GitHub] Pull Request Review: Fix auth token refresh logic,notifications@github.com,andy@example.com,,,2026/01/18 08:47,"@jdoe requested changes on your pull request #517...","@jdoe requested changes on your pull request #517 in repo client-product-dev/angel_email:
+
+Comment on src/angel_email/gmail_auth.py line 45:
+> The token refresh should use exponential backoff here. Currently it retries immediately which could hit rate limits.
+
+Comment on src/angel_email/gmail_auth.py line 62:
+> Consider adding a max_retries parameter with a sensible default.
+
+View the full review: https://github.com/client-product-dev/angel_email/pull/517","<html><body><p>@jdoe requested changes on your pull request #517...</p></body></html>",emails/INBOX/18d4b3a8d7c6e5f4.eml
+18d4c4b7e6f5d4c3,18d4c4b7e6f5d4c3,<bounce-12345@ses.amazonaws.com>,Your AWS Bill for January 2026,no-reply@amazonaws.com,andy@example.com,,,2026/02/01 06:00,"Your AWS billing statement for January 2026 is now available...","Hello,
+
+Your AWS billing statement for January 2026 is now available.
+
+Account: 1234-5678-9012
+Billing Period: January 1 - January 31, 2026
+Total Charges: $187.43
+
+Service Breakdown:
+- EC2: $92.10
+- S3: $34.22
+- RDS: $45.80
+- CloudWatch: $8.91
+- Other: $6.40
+
+To view your detailed bill, sign in to the AWS Billing Console.
+
+Thank you,
+Amazon Web Services","<html><body><p>Hello,</p><p>Your AWS billing statement for January 2026 is now available.</p></body></html>",emails/INBOX/18d4c4b7e6f5d4c3.eml
+18d4d5c6f7e8a9b0,18d4d5c6f7e8a9b0,<CADn+8Pp@mail.gmail.com>,Re: Dinner Friday?,Maria Lopez <maria.lopez@example.com>,andy@example.com,,,2026/02/04 18:22,"Sounds great! Let's do 7pm at that new Italian place on 5th...","Hey!
+
+Sounds great! Let's do 7pm at that new Italian place on 5th Street - Trattoria Bella. I made a reservation for 4.
+
+Can you check if Jake and Priya can make it too?
+
+See you Friday!
+Maria","<html><body><p>Hey!</p><p>Sounds great! Let's do 7pm at that new Italian place on 5th Street...</p></body></html>",emails/INBOX/18d4d5c6f7e8a9b0.eml
+18d4e6d7a8b9c0d1,18d4e6d7a8b9c0d1,<noreply-calendar@google.com>,Reminder: Q1 Planning Meeting tomorrow at 10:00 AM,calendar-notification@google.com,andy@example.com,,,2026/02/05 17:00,"Reminder: Q1 Planning Meeting - Tomorrow Feb 6 at 10:00 AM...","You have an upcoming event:
+
+Q1 Planning Meeting
+When: Thursday, February 6, 2026 10:00 AM - 12:00 PM (EST)
+Where: Conference Room B / Zoom (link in calendar invite)
+Organizer: David Kim <david.kim@example.com>
+
+Attendees:
+- Andy (you)
+- Sarah Connor
+- Mike Chen
+- Lisa Park
+- David Kim
+
+Agenda:
+1. Q4 retrospective review
+2. Q1 OKR alignment
+3. Resource allocation
+4. Timeline and milestones","<html><body><p>You have an upcoming event:</p><p><b>Q1 Planning Meeting</b></p></body></html>",emails/INBOX/18d4e6d7a8b9c0d1.eml
+18d4f7e8b9c0d1e2,18d4f7e8b9c0d1e2,<support-ticket-88431@zendesk.com>,Re: Support Ticket #88431 - Integration API returning 403,support@vendorplatform.com,andy@example.com,,,2026/02/06 11:35,"We've identified the issue with your API integration...","Hi Andy,
+
+Thank you for your patience. We've identified the issue with your API integration.
+
+The 403 errors were caused by a recent change to our OAuth scopes. Your application needs to request the 'data:read:v2' scope in addition to the existing ones.
+
+Steps to fix:
+1. Update your OAuth configuration to include scope 'data:read:v2'
+2. Re-authorize your application
+3. Regenerate your access tokens
+
+We've also extended your rate limit to 10,000 requests/hour as a courtesy for the inconvenience.
+
+Please let us know if you need further assistance.
+
+Best regards,
+Technical Support Team
+Vendor Platform Inc.","<html><body><p>Hi Andy,</p><p>Thank you for your patience. We've identified the issue...</p></body></html>",emails/INBOX/18d4f7e8b9c0d1e2.eml

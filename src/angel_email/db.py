@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 import json
 import sqlite3
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -58,6 +60,20 @@ SCHEMA = {
 }
 
 
+def normalize_date(raw_date: Optional[str]) -> Optional[str]:
+    """Convert an RFC 2822 date string to yyyy/mm/dd hh:mm format.
+
+    If parsing fails the original value is returned unchanged.
+    """
+    if not raw_date:
+        return raw_date
+    try:
+        dt = parsedate_to_datetime(raw_date)
+        return dt.strftime("%Y/%m/%d %H:%M")
+    except Exception:
+        return raw_date
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
@@ -91,6 +107,7 @@ def upsert_email(
     raw_eml_path: Path,
 ) -> None:
     headers_json = json.dumps(headers or {}, ensure_ascii=False)
+    date = normalize_date(date)
     conn.execute(
         """
         INSERT INTO emails (
@@ -185,3 +202,24 @@ def insert_email_labels(
             (email_id, label_name, label_id),
         )
     conn.commit()
+
+
+def export_csv(conn: sqlite3.Connection, csv_path: Path) -> None:
+    """Export all emails to a CSV file alongside the database."""
+    cursor = conn.execute(
+        """
+        SELECT gmail_id, thread_id, message_id, subject, from_addr,
+               to_addrs, cc_addrs, bcc_addrs, date, snippet,
+               text_body, html_body, raw_eml_path
+        FROM emails
+        ORDER BY date
+        """
+    )
+    columns = [desc[0] for desc in cursor.description]
+    rows = cursor.fetchall()
+
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(columns)
+        writer.writerows(rows)
