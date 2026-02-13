@@ -123,7 +123,7 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
 
             # Skip Outlook/Exchange internal metadata parts
             if filename and any(
-                filename.upper().startswith(prefix)
+                prefix in filename.upper()
                 for prefix in _OUTLOOK_JUNK_PREFIXES
             ):
                 continue

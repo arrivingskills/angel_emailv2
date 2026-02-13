@@ -91,9 +91,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument(
         "--mark-downloaded",
         type=str,
-        default=None,
+        default="00downloaded",
         metavar="LABEL",
-        help="Gmail label name to apply to downloaded emails (e.g., 'Downloaded'). Label will be created if it doesn't exist.",
+        help="Gmail label name to apply to downloaded emails (default: '00downloaded'). Label will be created if it doesn't exist.",
     )
 
     args = parser.parse_args(argv)
