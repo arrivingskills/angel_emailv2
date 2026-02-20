@@ -172,7 +172,11 @@ def insert_attachment(
     size: int,
     file_path: Path,
 ) -> None:
-    """Insert attachment metadata into the attachments table."""
+    """Insert attachment metadata into the attachments table.
+
+    Does NOT commit — callers should commit once after inserting all attachments
+    for a message to keep the batch atomic and reduce round-trips.
+    """
     conn.execute(
         """
         INSERT INTO attachments (email_id, filename, content_type, size, file_path)
@@ -180,7 +184,6 @@ def insert_attachment(
         """,
         (email_id, filename, content_type, size, str(file_path)),
     )
-    conn.commit()
 
 
 def insert_email_labels(
@@ -206,13 +209,16 @@ def insert_email_labels(
 
 def export_csv(conn: sqlite3.Connection, csv_path: Path) -> None:
     """Export all emails to a CSV file alongside the database."""
+    # Order by created_at (always ISO timestamp) rather than the 'date' column,
+    # because normalize_date can fall back to a raw RFC 2822 string that sorts
+    # non-chronologically as plain text, silently scrambling the export order.
     cursor = conn.execute(
         """
         SELECT gmail_id, thread_id, message_id, subject, from_addr,
                to_addrs, cc_addrs, bcc_addrs, date, snippet,
                text_body, html_body, raw_eml_path
         FROM emails
-        ORDER BY date
+        ORDER BY created_at
         """
     )
     columns = [desc[0] for desc in cursor.description]

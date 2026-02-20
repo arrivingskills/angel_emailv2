@@ -91,9 +91,13 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument(
         "--mark-downloaded",
         type=str,
-        default="00downloaded",
+        default=None,
         metavar="LABEL",
-        help="Gmail label name to apply to downloaded emails (default: '00downloaded'). Label will be created if it doesn't exist.",
+        help=(
+            "Gmail label to apply to each downloaded message "
+            "(e.g. '00downloaded'). Omit to disable marking entirely. "
+            "The label will be created if it doesn't already exist."
+        ),
     )
 
     args = parser.parse_args(argv)
@@ -122,8 +126,12 @@ def main(argv: Optional[List[str]] = None) -> None:
         )
         sys.exit(2)
 
+    # Fetch labels once; reuse the map for both ID resolution and reverse-lookup
+    # to avoid a redundant network round-trip.
+    label_map = list_labels(service)
+    label_id_to_name = {v: k for k, v in label_map.items()}
     try:
-        label_ids = resolve_label_ids(service, label_names)
+        label_ids = resolve_label_ids(service, label_names, label_map=label_map)
     except ValueError as e:
         print(str(e))
         sys.exit(2)
@@ -134,139 +142,136 @@ def main(argv: Optional[List[str]] = None) -> None:
     db_path: Path = args.db
     conn = dbmod.connect(db_path)
     dbmod.init_db(conn)
+    try:
+        # Only create/get the "downloaded" label if --mark-downloaded is specified
+        downloaded_label_name: str | None = args.mark_downloaded
+        downloaded_label_id: str | None = None
+        if downloaded_label_name:
+            downloaded_label_id = create_label_if_not_exists(service, downloaded_label_name)
+            print(f"Will mark downloaded emails with label: {downloaded_label_name}")
 
-    # Get full label details for mapping
-    label_map = list_labels(service)
-    label_id_to_name = {v: k for k, v in label_map.items()}
+        # Fetch message IDs
+        print(f"Listing messages for labels: {', '.join(label_names)}")
+        # Exclude already-downloaded messages so they are not re-downloaded (only if marking is enabled).
+        combined_q = args.query
+        if downloaded_label_name:
+            # Quote label name to handle spaces properly in Gmail query syntax
+            escaped_label = f'"{downloaded_label_name}"' if ' ' in downloaded_label_name else downloaded_label_name
+            exclude_q = f"-label:{escaped_label}"
+            combined_q = f"{args.query} {exclude_q}" if args.query else exclude_q
+        msg_ids = list_message_ids(
+            service, label_ids=label_ids, max_results=args.max, q=combined_q
+        )
+        print(f"Found {len(msg_ids)} messages")
 
-    # Only create/get the "downloaded" label if --mark-downloaded is specified
-    downloaded_label_name: str | None = args.mark_downloaded
-    downloaded_label_id: str | None = None
-    if downloaded_label_name:
-        downloaded_label_id = create_label_if_not_exists(service, downloaded_label_name)
-        print(f"Will mark downloaded emails with label: {downloaded_label_name}")
+        # Download, save, parse, and upsert
+        for idx, mid in enumerate(msg_ids, start=1):
+            try:
+                raw_bytes = get_message_raw(service, mid)
+                meta = get_message_metadata(service, mid)
+                thread_id = meta.get("threadId")
+                snippet = meta.get("snippet")
+                msg_label_ids = meta.get("labelIds", [])
 
-    # Fetch message IDs
-    print(f"Listing messages for labels: {', '.join(label_names)}")
-    # Exclude already-downloaded messages so they are not re-downloaded (only if marking is enabled).
-    combined_q = args.query
-    if downloaded_label_name:
-        # Quote label name to handle spaces properly in Gmail query syntax
-        escaped_label = f'"{downloaded_label_name}"' if ' ' in downloaded_label_name else downloaded_label_name
-        exclude_q = f"-label:{escaped_label}"
-        combined_q = f"{args.query} {exclude_q}" if args.query else exclude_q
-    msg_ids = list_message_ids(
-        service, label_ids=label_ids, max_results=args.max, q=combined_q
-    )
-    print(f"Found {len(msg_ids)} messages")
+                # Determine primary label folder (use first matching label from user's selection)
+                primary_label = label_names[0]  # Default to first requested label
+                for label_id in msg_label_ids:
+                    label_name = label_id_to_name.get(label_id, "")
+                    if label_name in label_names:
+                        primary_label = label_name
+                        break
 
-    # Download, save, parse, and upsert
-    for idx, mid in enumerate(msg_ids, start=1):
-        try:
-            raw_bytes = get_message_raw(service, mid)
-            meta = get_message_metadata(service, mid)
-            thread_id = meta.get("threadId")
-            snippet = meta.get("snippet")
-            msg_label_ids = meta.get("labelIds", [])
+                # Create label-specific directory (strip any extra whitespace)
+                label_dir = base_emails_dir / primary_label.strip()
+                label_dir.mkdir(parents=True, exist_ok=True)
 
-            # Determine primary label folder (use first matching label from user's selection)
-            primary_label = label_names[0]  # Default to first requested label
-            for label_id in msg_label_ids:
-                label_name = label_id_to_name.get(label_id, "")
-                if label_name in label_names:
-                    primary_label = label_name
-                    break
+                # Save .eml file in label folder
+                eml_path = save_eml(raw_bytes, label_dir, mid)
 
-            # Create label-specific directory (strip any extra whitespace)
-            label_dir = base_emails_dir / primary_label.strip()
-            label_dir.mkdir(parents=True, exist_ok=True)
+                # Parse email once and extract all needed data
+                parsed, msg = parse_message_object(raw_bytes)
+                attachments = extract_attachments(msg)
 
-            # Save .eml file in label folder
-            eml_path = save_eml(raw_bytes, label_dir, mid)
-            
-            # Parse email once and extract all needed data
-            parsed, msg = parse_message_object(raw_bytes)
-            attachments = extract_attachments(msg)
-
-            # Upsert email data
-            dbmod.upsert_email(
-                conn,
-                gmail_id=mid,
-                thread_id=thread_id,
-                message_id=parsed.get("message_id"),
-                subject=parsed.get("subject"),
-                from_addr=parsed.get("from_"),
-                to_addrs=parsed.get("to"),
-                cc_addrs=parsed.get("cc"),
-                bcc_addrs=parsed.get("bcc"),
-                date=parsed.get("date"),
-                snippet=snippet,
-                text_body=parsed.get("text_body"),
-                html_body=parsed.get("html_body"),
-                headers=parsed.get("headers"),
-                raw_eml_path=eml_path,
-            )
-
-            # Get the internal email ID for foreign key references
-            email_id = dbmod.get_email_id_by_gmail_id(conn, mid)
-            if email_id:
-                # Save label associations (filter out None values)
-                label_tuples = [
-                    (label_id_to_name[lid], lid)
-                    for lid in msg_label_ids
-                    if lid in label_id_to_name
-                ]
-                if label_tuples:
-                    dbmod.insert_email_labels(
-                        conn, email_id=email_id, labels=label_tuples
-                    )
-
-                # Delete existing attachments before re-inserting (handles upsert case)
-                dbmod.delete_attachments_for_email(conn, email_id)
-                clear_attachments_dir(label_dir, mid)
-                
-                # Save attachments to disk and record in DB
-                for attachment in attachments:
-                    try:
-                        attachment_path = save_attachment(
-                            attachment["data"], label_dir, mid, attachment["filename"]
-                        )
-                        dbmod.insert_attachment(
-                            conn,
-                            email_id=email_id,
-                            filename=attachment["filename"],
-                            content_type=attachment["content_type"],
-                            size=attachment["size"],
-                            file_path=attachment_path,
-                        )
-                    except Exception as e:
-                        print(
-                            f"  Warning: Failed to save attachment {attachment['filename']}: {e}"
-                        )
-
-            # Mark email as downloaded in Gmail if option is enabled
-            if downloaded_label_id:
-                try:
-                    add_label_to_message(service, mid, downloaded_label_id)
-                except Exception as e:
-                    print(f"  Warning: Failed to add label to message {mid}: {e}")
-
-            if idx % 20 == 0 or idx == len(msg_ids):
-                attachments_count = len(attachments) if attachments else 0
-                print(
-                    f"Processed {idx}/{len(msg_ids)} (label: {primary_label}, attachments: {attachments_count})"
+                # Upsert email data
+                dbmod.upsert_email(
+                    conn,
+                    gmail_id=mid,
+                    thread_id=thread_id,
+                    message_id=parsed.get("message_id"),
+                    subject=parsed.get("subject"),
+                    from_addr=parsed.get("from_"),
+                    to_addrs=parsed.get("to"),
+                    cc_addrs=parsed.get("cc"),
+                    bcc_addrs=parsed.get("bcc"),
+                    date=parsed.get("date"),
+                    snippet=snippet,
+                    text_body=parsed.get("text_body"),
+                    html_body=parsed.get("html_body"),
+                    headers=parsed.get("headers"),
+                    raw_eml_path=eml_path,
                 )
-        except KeyboardInterrupt:
-            print("Interrupted by user")
-            conn.close()
-            return
-        except Exception as e:
-            print(f"Error processing message {mid}: {e}")
 
-    # Export all emails to CSV alongside the database
-    csv_path = db_path.parent / "emails.csv"
-    dbmod.export_csv(conn, csv_path)
-    print(f"Exported emails to {csv_path}")
+                # Get the internal email ID for foreign key references
+                email_id = dbmod.get_email_id_by_gmail_id(conn, mid)
+                if email_id:
+                    # Save label associations (filter out None values)
+                    label_tuples = [
+                        (label_id_to_name[lid], lid)
+                        for lid in msg_label_ids
+                        if lid in label_id_to_name
+                    ]
+                    if label_tuples:
+                        dbmod.insert_email_labels(
+                            conn, email_id=email_id, labels=label_tuples
+                        )
 
-    conn.close()
-    print("Done.")
+                    # Delete existing attachments before re-inserting (handles upsert case)
+                    dbmod.delete_attachments_for_email(conn, email_id)
+                    clear_attachments_dir(label_dir, mid)
+
+                    # Save attachments to disk and record in DB
+                    for attachment in attachments:
+                        try:
+                            attachment_path = save_attachment(
+                                attachment["data"], label_dir, mid, attachment["filename"]
+                            )
+                            dbmod.insert_attachment(
+                                conn,
+                                email_id=email_id,
+                                filename=attachment["filename"],
+                                content_type=attachment["content_type"],
+                                size=attachment["size"],
+                                file_path=attachment_path,
+                            )
+                        except Exception as e:
+                            print(
+                                f"  Warning: Failed to save attachment {attachment['filename']}: {e}"
+                            )
+                    # Single commit covers all attachment rows for this message.
+                    conn.commit()
+
+                # Mark email as downloaded in Gmail if option is enabled
+                if downloaded_label_id:
+                    try:
+                        add_label_to_message(service, mid, downloaded_label_id)
+                    except Exception as e:
+                        print(f"  Warning: Failed to add label to message {mid}: {e}")
+
+                if idx % 20 == 0 or idx == len(msg_ids):
+                    attachments_count = len(attachments) if attachments else 0
+                    print(
+                        f"Processed {idx}/{len(msg_ids)} (label: {primary_label}, attachments: {attachments_count})"
+                    )
+            except KeyboardInterrupt:
+                print("Interrupted by user")
+                return
+            except Exception as e:
+                print(f"Error processing message {mid}: {e}")
+
+        # Export all emails to CSV alongside the database
+        csv_path = db_path.parent / "emails.csv"
+        dbmod.export_csv(conn, csv_path)
+        print(f"Exported emails to {csv_path}")
+        print("Done.")
+    finally:
+        conn.close()

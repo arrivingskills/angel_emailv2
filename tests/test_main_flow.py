@@ -61,8 +61,8 @@ def run_one_scenario(mark_downloaded_arg: str | None):
             out.write_bytes(raw_bytes)
             return out
 
-        def fake_parse_eml_bytes(raw):
-            return {}
+        def fake_parse_message_object(raw):
+            return {}, MagicMock()
 
         def fake_extract_attachments(msg):
             return []
@@ -98,13 +98,13 @@ def run_one_scenario(mark_downloaded_arg: str | None):
         angel_email.load_credentials = fake_load_credentials
         angel_email.build_gmail_service = fake_build_service
         angel_email.create_label_if_not_exists = fake_create_label
-        angel_email.resolve_label_ids = lambda service, names: ["INBOXID"]
+        angel_email.resolve_label_ids = lambda service, names, label_map=None: ["INBOXID"]
         angel_email.list_labels = lambda service: {"INBOX": "INBOXID"}
         angel_email.list_message_ids = fake_list_message_ids
         angel_email.get_message_raw = fake_get_message_raw
         angel_email.get_message_metadata = fake_get_message_metadata
         angel_email.save_eml = fake_save_eml
-        angel_email.parse_eml_bytes = fake_parse_eml_bytes
+        angel_email.parse_message_object = fake_parse_message_object
         angel_email.extract_attachments = fake_extract_attachments
         angel_email.db.connect = fake_connect
         angel_email.db.init_db = fake_init_db

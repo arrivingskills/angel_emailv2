@@ -158,5 +158,35 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
                 except Exception:
                     # Skip attachments that can't be decoded
                     continue
+    else:
+        # Non-multipart message: check if the message itself is an attachment
+        # (uncommon but valid per RFC 2183, e.g. a forwarded .eml).
+        content_disposition = msg.get("Content-Disposition", "")
+        filename = msg.get_filename()
+
+        if filename and any(
+            prefix in filename.upper() for prefix in _OUTLOOK_JUNK_PREFIXES
+        ):
+            return attachments
+
+        is_attachment = (
+            "attachment" in content_disposition.lower()
+            or ("inline" in content_disposition.lower() and filename)
+        )
+
+        if is_attachment and filename:
+            try:
+                data = msg.get_payload(decode=True)
+                if data:
+                    attachments.append(
+                        {
+                            "filename": filename,
+                            "content_type": msg.get_content_type(),
+                            "data": data,
+                            "size": len(data),
+                        }
+                    )
+            except Exception:
+                pass
 
     return attachments

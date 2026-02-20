@@ -9,8 +9,9 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Scopes required for modifying labels and messages (read + modify + labels)
+# gmail.modify is a superset of gmail.readonly; listing both is redundant and
+# causes unnecessary scope prompts / token invalidation.
 SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.labels",
 ]

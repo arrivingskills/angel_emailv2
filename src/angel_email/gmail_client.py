@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import shutil
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -18,8 +19,22 @@ def list_labels(service: Resource) -> Dict[str, str]:
     return {lbl["name"]: lbl["id"] for lbl in labels}
 
 
-def resolve_label_ids(service: Resource, label_names: Iterable[str]) -> List[str]:
-    label_map = list_labels(service)
+def resolve_label_ids(
+    service: Resource,
+    label_names: Iterable[str],
+    label_map: Optional[Dict[str, str]] = None,
+) -> List[str]:
+    """Resolve label names to IDs.
+
+    Args:
+        service: Gmail API service.
+        label_names: Names to resolve.
+        label_map: Pre-fetched name->id mapping.  When provided the function
+            skips the API call, allowing callers to reuse a map they already
+            hold and avoid a redundant network round-trip.
+    """
+    if label_map is None:
+        label_map = list_labels(service)
     ids: List[str] = []
     missing: List[str] = []
     for name in label_names:
