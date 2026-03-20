@@ -115,6 +115,57 @@ Troubleshooting
 - Token/consent issues: delete `token.json` and re-run to re-consent.
 - Rate limits: if you have many emails, consider using `--max` and/or `--query` to batch downloads.
 
+Graphical UI
+
+Launch the UI instead of the CLI:
+
+```
+uv run angel-email --ui
+```
+
+Or directly:
+
+```
+uv run python -m angel_email.ui
+```
+
+**Form fields**
+
+| Field | Default | Description |
+|---|---|---|
+| Credentials JSON | `./credentials.json` | Path to the OAuth2 client credentials JSON downloaded from Google Cloud Console. |
+| Token JSON | `./token.json` | Where the OAuth token is stored after the first login. Created automatically on first run. |
+| Labels | `INBOX` | Comma-separated Gmail label names to download, e.g. `INBOX,Work,Newsletters`. |
+| Emails dir | `./emails` | Directory where `.eml` files and attachments are saved. Created if it doesn't exist. |
+| DB path | `./emails/emails.db` | Path for the SQLite database that stores parsed email metadata. |
+| Gmail query (optional) | _(blank)_ | Extra Gmail search query to narrow results, e.g. `newer_than:1y` or `has:attachment`. |
+| Max results | _(blank)_ | Maximum number of emails to download per run. Leave blank for no limit. |
+| Mark-downloaded label | _(blank)_ | A Gmail label to apply to each downloaded message (created automatically if it doesn't exist). Useful for tracking what has been backed up. |
+| Backup folder | `./backups` | Destination directory for the **Backup Data** action (see below). |
+
+**Buttons**
+
+- **List Labels** — Connects to Gmail and prints all available label names and IDs to the log panel. Run this first if you are unsure of the exact label names to put in the _Labels_ field.
+- **Start Download** — Runs the download with the current field values. Progress and any errors are printed to the log panel in real time.
+- **Backup Data** — Copies the emails directory, credentials file, and token file into a timestamped folder inside the _Backup folder_ path (e.g. `./backups/angel_email_backup_20260312-162449/`).
+- **Clear Log** — Clears the log panel.
+
+**Typical workflow**
+
+1. Set _Credentials JSON_ to the path of your downloaded Google OAuth credentials.
+2. Click **List Labels** — a browser window will open on first run for Google account consent. After authenticating, label names appear in the log.
+3. Copy the desired label names into the _Labels_ field (comma-separated).
+4. Optionally set _Max results_ and/or a _Gmail query_ to limit the scope.
+5. Optionally set _Mark-downloaded label_ so processed emails get tagged in Gmail.
+6. Click **Start Download**. Watch the log panel for progress.
+7. When finished, click **Backup Data** to archive the downloaded files.
+
+**Notes**
+
+- The first run opens a browser for Google OAuth consent. Subsequent runs reuse the saved token.
+- All fields default to paths relative to the directory you launched the tool from.
+- The log panel is scrollable and its text is selectable/copyable.
+
 Development
 
 - Entry point is defined in `pyproject.toml` as `angel_email:main`.

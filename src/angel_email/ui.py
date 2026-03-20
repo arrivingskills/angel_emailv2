@@ -12,13 +12,16 @@ import flet as ft
 
 import angel_email
 from angel_email.gmail_auth import load_credentials
-from angel_email.gmail_client import build_gmail_service, list_labels as _list_labels
+from angel_email.gmail_client import (
+    build_gmail_service,
+    list_labels as _list_labels,
+)
 
 
-_LOG_STYLE = ft.TextStyle(size=14, color=ft.Colors.BLACK)
+_LOG_STYLE = ft.TextStyle(size=14, color="#0a0a0a")
 
-_FIELD_STYLE = ft.TextStyle(size=15, color=ft.Colors.BLACK)
-_LABEL_STYLE = ft.TextStyle(size=13, color=ft.Colors.BLACK)
+_FIELD_STYLE = ft.TextStyle(size=15, color="#0a0a0a")
+_LABEL_STYLE = ft.TextStyle(size=13, color="#0a0a0a")
 
 
 def _log(page: ft.Page, log_col: ft.Column, text: str) -> None:
@@ -63,7 +66,8 @@ def _field(label: str, value: str = "", **kw) -> ft.TextField:
 
 def main_page(page: ft.Page) -> None:
     page.title = "Angel Email"
-    page.window = ft.Window(width=960, height=760)
+    page.window.width = 960
+    page.window.height = 760
     page.padding = 0
     page.bgcolor = ft.Colors.WHITE
 
@@ -74,11 +78,15 @@ def main_page(page: ft.Page) -> None:
     )
 
     # ── form fields ──────────────────────────────────────────────
-    creds = _field("Credentials JSON", str(Path.cwd() / "credentials.json"))
-    token = _field("Token JSON", str(Path.cwd() / "token.json"))
-    labels = _field("Labels (comma-separated)", "INBOX")
+    creds = _field(
+        "Credentials JSON", str(Path.cwd() / "credentials.json"), expand=True
+    )
+    token = _field("Token JSON", str(Path.cwd() / "token.json"), expand=True)
+    labels = _field("Labels (comma-separated)", "INBOX", expand=True)
     emails_dir = _field("Emails dir", str(Path.cwd() / "emails"), expand=True)
-    db_path = _field("DB path", str(Path.cwd() / "emails" / "emails.db"), expand=True)
+    db_path = _field(
+        "DB path", str(Path.cwd() / "emails" / "emails.db"), expand=True
+    )
     query = _field("Gmail query (optional)", expand=True)
     max_count = _field("Max results", width=150)
     mark_label = _field("Mark-downloaded label", expand=True)
@@ -94,7 +102,7 @@ def main_page(page: ft.Page) -> None:
         "and you can search using email properties, for example: "
         "subject:invoice from:alice@example.com hasattachment:yes",
         size=12,
-        color=ft.Colors.GREY_800,
+        color="#1a1a1a",
         selectable=True,
     )
 
@@ -120,7 +128,9 @@ def main_page(page: ft.Page) -> None:
         def _work() -> None:
             try:
                 _log(page, log_col, "Listing labels…")
-                credentials = load_credentials(Path(creds.value), Path(token.value))
+                credentials = load_credentials(
+                    Path(creds.value), Path(token.value)
+                )
                 service = build_gmail_service(credentials)
                 lbls = _list_labels(service)
                 for name in sorted(lbls.keys()):
@@ -186,7 +196,11 @@ def main_page(page: ft.Page) -> None:
                     if path.is_dir():
                         dest = backup_root / path.name
                         shutil.copytree(path, dest, dirs_exist_ok=True)
-                        _log(page, log_col, f"  Copied directory {path} → {dest}")
+                        _log(
+                            page,
+                            log_col,
+                            f"  Copied directory {path} → {dest}",
+                        )
                     elif path.is_file():
                         dest = backup_root / path.name
                         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -213,25 +227,33 @@ def main_page(page: ft.Page) -> None:
         "List Labels",
         icon=ft.Icons.LABEL_OUTLINE,
         on_click=on_list_labels,
-        style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=24, vertical=14)),
+        style=ft.ButtonStyle(
+            padding=ft.padding.symmetric(horizontal=24, vertical=14)
+        ),
     )
     btn_start = ft.FilledButton(
         "Start Download",
         icon=ft.Icons.DOWNLOAD,
         on_click=on_start,
-        style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=24, vertical=14)),
+        style=ft.ButtonStyle(
+            padding=ft.padding.symmetric(horizontal=24, vertical=14)
+        ),
     )
     btn_clear = ft.OutlinedButton(
         "Clear Log",
         icon=ft.Icons.DELETE_OUTLINE,
         on_click=on_clear_log,
-        style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=20, vertical=14)),
+        style=ft.ButtonStyle(
+            padding=ft.padding.symmetric(horizontal=20, vertical=14)
+        ),
     )
     btn_backup = ft.OutlinedButton(
         "Backup Data",
         icon=ft.Icons.CLOUD_UPLOAD,
         on_click=on_backup,
-        style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=20, vertical=14)),
+        style=ft.ButtonStyle(
+            padding=ft.padding.symmetric(horizontal=20, vertical=14)
+        ),
     )
 
     # ── layout ───────────────────────────────────────────────────
@@ -242,7 +264,7 @@ def main_page(page: ft.Page) -> None:
                 ft.Text(
                     "Angel Email",
                     theme_style=ft.TextThemeStyle.HEADLINE_SMALL,
-                    color=ft.Colors.BLACK,
+                    color="#0a0a0a",
                     weight=ft.FontWeight.W_600,
                 ),
             ],
@@ -262,7 +284,9 @@ def main_page(page: ft.Page) -> None:
                 explorer_hint,
                 ft.Row([query, max_count, mark_label], spacing=12),
                 backup_dir,
-                ft.Row([btn_list, btn_start, btn_backup, btn_clear], spacing=12),
+                ft.Row(
+                    [btn_list, btn_start, btn_backup, btn_clear], spacing=12
+                ),
             ],
             spacing=14,
             tight=True,
@@ -282,7 +306,7 @@ def main_page(page: ft.Page) -> None:
     log_header = ft.Text(
         "Log Output",
         theme_style=ft.TextThemeStyle.TITLE_SMALL,
-        color=ft.Colors.BLACK,
+        color="#0a0a0a",
         weight=ft.FontWeight.W_600,
     )
 

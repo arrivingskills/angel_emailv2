@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 import json
 
+import requests as _requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -29,7 +30,9 @@ def load_credentials(credentials_path: Path, token_path: Path) -> Credentials:
     # Try load existing token if present
     if token_path.exists():
         try:
-            creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+            creds = Credentials.from_authorized_user_file(
+                str(token_path), SCOPES
+            )
         except Exception:
             creds = None
 
@@ -48,15 +51,19 @@ def load_credentials(credentials_path: Path, token_path: Path) -> Credentials:
         if not set(SCOPES).issubset(token_scopes_set):
             try:
                 token_path.unlink()
-                print(f"Existing token at {token_path} lacks required scopes; removed to force re-auth.")
+                print(
+                    f"Existing token at {token_path} lacks required scopes; removed to force re-auth."
+                )
             except Exception:
-                print(f"Warning: failed to remove token at {token_path}; continuing to re-auth.")
+                print(
+                    f"Warning: failed to remove token at {token_path}; continuing to re-auth."
+                )
             creds = None
 
     # Try refresh if possible
     if creds and creds.expired and creds.refresh_token:
         try:
-            creds.refresh(Request())
+            creds.refresh(Request(session=_requests.Session()))
         except Exception:
             print("Warning: failed to refresh token; will run OAuth flow.")
             creds = None
@@ -64,12 +71,18 @@ def load_credentials(credentials_path: Path, token_path: Path) -> Credentials:
     # If we don't have valid creds, run the local server flow
     if not creds or not creds.valid:
         if not credentials_path.exists():
-            raise FileNotFoundError(f"Client secrets file not found: {credentials_path}")
+            raise FileNotFoundError(
+                f"Client secrets file not found: {credentials_path}"
+            )
 
-        print("Starting local OAuth flow to obtain credentials with required scopes:")
+        print(
+            "Starting local OAuth flow to obtain credentials with required scopes:"
+        )
         for s in SCOPES:
             print(f"  - {s}")
-        flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+        flow = InstalledAppFlow.from_client_secrets_file(
+            str(credentials_path), SCOPES
+        )
         new_creds = flow.run_local_server(port=0)
         # Cast to the expected type (InstalledAppFlow always returns oauth2 Credentials for Gmail)
         creds = new_creds  # type: ignore[assignment]
