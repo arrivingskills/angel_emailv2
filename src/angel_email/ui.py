@@ -92,10 +92,10 @@ def main_page(page: ft.Page) -> None:
     mark_label = _field("Mark-downloaded label", expand=True)
     backup_dir = _field(
         "Backup folder (drive/path)",
-        str(Path.cwd() / "backups"),
+        "/mnt/c/Users/angel/Documents/linux_email_backups",
         expand=True,
     )
-
+    #         str(Path.cwd() / "backups"),
     # Hint for Windows Explorer searches on downloaded .eml files
     explorer_hint = ft.Text(
         "Windows File Explorer tip: after syncing emails, open the 'Emails dir' in Explorer "
