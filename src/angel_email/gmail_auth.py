@@ -33,7 +33,8 @@ def load_credentials(credentials_path: Path, token_path: Path) -> Credentials:
             creds = Credentials.from_authorized_user_file(
                 str(token_path), SCOPES
             )
-        except Exception:
+        except Exception as e:
+            print(f"Warning: failed to load token from {token_path}: {e}")
             creds = None
 
         # Verify token contains required scopes; if not, remove it to force re-auth.
@@ -93,8 +94,8 @@ def load_credentials(credentials_path: Path, token_path: Path) -> Credentials:
             token_path.parent.mkdir(parents=True, exist_ok=True)
             token_path.write_text(creds.to_json())
             print(f"Saved credentials to {token_path}")
-        except Exception:
-            print(f"Warning: failed to save token to {token_path}")
+        except Exception as e:
+            print(f"Warning: failed to save token to {token_path}: {e}")
 
     # At this point creds is guaranteed to be valid
     assert creds is not None, "Failed to obtain credentials"

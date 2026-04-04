@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
 from pathlib import Path
 from typing import List, Optional
 
@@ -19,7 +20,11 @@ from angel_email.gmail_client import (
     create_label_if_not_exists,
     add_label_to_message,
 )
-from angel_email.email_parser import parse_eml_bytes, extract_attachments, parse_message_object
+from angel_email.email_parser import (
+    parse_eml_bytes,
+    extract_attachments,
+    parse_message_object,
+)
 from angel_email import db as dbmod
 
 
@@ -113,6 +118,17 @@ def main(argv: Optional[List[str]] = None) -> None:
     creds = load_credentials(args.credentials, args.token)
     service = build_gmail_service(creds)
 
+    # Show which Google account is authenticated so the user can verify it's the right one.
+    try:
+        profile = service.users().getProfile(userId="me").execute()
+        authed_email = profile.get("emailAddress", "<unknown>")
+        messages_total = profile.get("messagesTotal", "?")
+        print(
+            f"Authenticated as: {authed_email} (total messages in mailbox: {messages_total})"
+        )
+    except Exception as e:
+        print(f"Warning: could not fetch account profile: {e}")
+
     if args.list_labels:
         label_map = list_labels(service)
         for name, lid in sorted(label_map.items()):
@@ -131,7 +147,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     label_map = list_labels(service)
     label_id_to_name = {v: k for k, v in label_map.items()}
     try:
-        label_ids = resolve_label_ids(service, label_names, label_map=label_map)
+        label_ids = resolve_label_ids(
+            service, label_names, label_map=label_map
+        )
     except ValueError as e:
         print(str(e))
         sys.exit(2)
@@ -147,8 +165,12 @@ def main(argv: Optional[List[str]] = None) -> None:
         downloaded_label_name: str | None = args.mark_downloaded
         downloaded_label_id: str | None = None
         if downloaded_label_name:
-            downloaded_label_id = create_label_if_not_exists(service, downloaded_label_name)
-            print(f"Will mark downloaded emails with label: {downloaded_label_name}")
+            downloaded_label_id = create_label_if_not_exists(
+                service, downloaded_label_name
+            )
+            print(
+                f"Will mark downloaded emails with label: {downloaded_label_name}"
+            )
 
         # Fetch message IDs
         print(f"Listing messages for labels: {', '.join(label_names)}")
@@ -156,13 +178,39 @@ def main(argv: Optional[List[str]] = None) -> None:
         combined_q = args.query
         if downloaded_label_name:
             # Quote label name to handle spaces properly in Gmail query syntax
-            escaped_label = f'"{downloaded_label_name}"' if ' ' in downloaded_label_name else downloaded_label_name
+            escaped_label = (
+                f'"{downloaded_label_name}"'
+                if " " in downloaded_label_name
+                else downloaded_label_name
+            )
             exclude_q = f"-label:{escaped_label}"
-            combined_q = f"{args.query} {exclude_q}" if args.query else exclude_q
+            combined_q = (
+                f"{args.query.strip()} {exclude_q}"
+                if args.query and args.query.strip()
+                else exclude_q
+            )
+        elif combined_q:
+            combined_q = combined_q.strip() or None
+
+        print(f"Searching label IDs: {label_ids}")
+        if combined_q:
+            print(f"Query filter: {combined_q}")
         msg_ids = list_message_ids(
             service, label_ids=label_ids, max_results=args.max, q=combined_q
         )
         print(f"Found {len(msg_ids)} messages")
+        if not msg_ids:
+            if downloaded_label_name:
+                print(
+                    f"Hint: all matching messages may already be tagged '{downloaded_label_name}' "
+                    "from a previous run. To re-download them, clear that label in Gmail or "
+                    "run without --mark-downloaded."
+                )
+            else:
+                print(
+                    "Hint: check that the label names are correct and that you are "
+                    "authenticated to the right Google account (see 'Authenticated as' above)."
+                )
 
         # Download, save, parse, and upsert
         for idx, mid in enumerate(msg_ids, start=1):
@@ -174,7 +222,9 @@ def main(argv: Optional[List[str]] = None) -> None:
                 msg_label_ids = meta.get("labelIds", [])
 
                 # Determine primary label folder (use first matching label from user's selection)
-                primary_label = label_names[0]  # Default to first requested label
+                primary_label = label_names[
+                    0
+                ]  # Default to first requested label
                 for label_id in msg_label_ids:
                     label_name = label_id_to_name.get(label_id, "")
                     if label_name in label_names:
@@ -213,6 +263,10 @@ def main(argv: Optional[List[str]] = None) -> None:
 
                 # Get the internal email ID for foreign key references
                 email_id = dbmod.get_email_id_by_gmail_id(conn, mid)
+                if email_id is None:
+                    print(
+                        f"  Warning: could not retrieve DB id for gmail_id={mid} after upsert; skipping labels and attachments"
+                    )
                 if email_id:
                     # Save label associations (filter out None values)
                     label_tuples = [
@@ -233,7 +287,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                     for attachment in attachments:
                         try:
                             attachment_path = save_attachment(
-                                attachment["data"], label_dir, mid, attachment["filename"]
+                                attachment["data"],
+                                label_dir,
+                                mid,
+                                attachment["filename"],
                             )
                             dbmod.insert_attachment(
                                 conn,
@@ -255,7 +312,9 @@ def main(argv: Optional[List[str]] = None) -> None:
                     try:
                         add_label_to_message(service, mid, downloaded_label_id)
                     except Exception as e:
-                        print(f"  Warning: Failed to add label to message {mid}: {e}")
+                        print(
+                            f"  Warning: Failed to add label to message {mid}: {e}"
+                        )
 
                 if idx % 20 == 0 or idx == len(msg_ids):
                     attachments_count = len(attachments) if attachments else 0
@@ -267,6 +326,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 return
             except Exception as e:
                 print(f"Error processing message {mid}: {e}")
+                traceback.print_exc()
 
         # Export all emails to CSV alongside the database
         csv_path = db_path.parent / "emails.csv"

@@ -48,6 +48,38 @@ def parse_message_object(raw_bytes: bytes) -> Tuple[Dict[str, Any], Message]:
     return parsed, msg
 
 
+def _decode_part(part: Message) -> Optional[str]:
+    """Try every available method to extract decoded text from a MIME part."""
+    # Method 1: policy.default EmailMessage API
+    try:
+        content = part.get_content()
+        if content is not None:
+            return str(content)
+    except Exception:
+        pass
+
+    # Method 2: compat32 decoded payload
+    try:
+        payload = part.get_payload(decode=True)
+        if isinstance(payload, bytes):
+            charset = part.get_content_charset() or "utf-8"
+            return payload.decode(charset, errors="replace")
+        if isinstance(payload, str):
+            return payload
+    except Exception:
+        pass
+
+    # Method 3: raw unencoded payload (last resort)
+    try:
+        payload = part.get_payload(decode=False)
+        if isinstance(payload, str):
+            return payload
+    except Exception:
+        pass
+
+    return None
+
+
 def extract_bodies(msg: Message) -> Tuple[Optional[str], Optional[str]]:
     """Extract the best-effort text and HTML payloads from the message."""
     text_body: Optional[str] = None
@@ -58,35 +90,32 @@ def extract_bodies(msg: Message) -> Tuple[Optional[str], Optional[str]]:
             if part.get_content_maintype() == "multipart":
                 continue
             ctype = part.get_content_type()
-            try:
-                payload = part.get_content()
-            except Exception:
-                try:
-                    payload = part.get_payload(decode=True)
-                    if isinstance(payload, bytes):
-                        payload = payload.decode(
-                            part.get_content_charset() or "utf-8", errors="replace"
-                        )
-                except Exception:
-                    payload = None
-            if ctype == "text/plain" and payload is not None and text_body is None:
-                text_body = str(payload)
-            elif ctype == "text/html" and payload is not None and html_body is None:
-                html_body = str(payload)
+            if ctype not in ("text/plain", "text/html"):
+                continue
+            if ctype == "text/plain" and text_body is not None:
+                continue
+            if ctype == "text/html" and html_body is not None:
+                continue
+            payload = _decode_part(part)
+            if payload is None:
+                print(
+                    f"  Warning: could not extract content from {ctype} part; body may be incomplete"
+                )
+            elif ctype == "text/plain":
+                text_body = payload
+            else:
+                html_body = payload
     else:
         ctype = msg.get_content_type()
-        try:
-            payload = msg.get_content()
-        except Exception:
-            payload = msg.get_payload(decode=True)
-            if isinstance(payload, bytes):
-                payload = payload.decode(
-                    msg.get_content_charset() or "utf-8", errors="replace"
-                )
+        payload = _decode_part(msg)
+        if payload is None and ctype in ("text/plain", "text/html"):
+            print(
+                f"  Warning: could not extract content from {ctype} message; body may be incomplete"
+            )
         if ctype == "text/plain":
-            text_body = str(payload) if payload is not None else None
+            text_body = payload
         elif ctype == "text/html":
-            html_body = str(payload) if payload is not None else None
+            html_body = payload
 
     return text_body, html_body
 
@@ -123,8 +152,7 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
 
             # Skip Outlook/Exchange internal metadata parts
             if filename and any(
-                prefix in filename.upper()
-                for prefix in _OUTLOOK_JUNK_PREFIXES
+                prefix in filename.upper() for prefix in _OUTLOOK_JUNK_PREFIXES
             ):
                 continue
 
@@ -155,8 +183,10 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
                                 "size": len(data),
                             }
                         )
-                except Exception:
-                    # Skip attachments that can't be decoded
+                except Exception as e:
+                    print(
+                        f"  Warning: could not decode attachment '{filename}': {e}"
+                    )
                     continue
     else:
         # Non-multipart message: check if the message itself is an attachment
@@ -169,9 +199,8 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
         ):
             return attachments
 
-        is_attachment = (
-            "attachment" in content_disposition.lower()
-            or ("inline" in content_disposition.lower() and filename)
+        is_attachment = "attachment" in content_disposition.lower() or (
+            "inline" in content_disposition.lower() and filename
         )
 
         if is_attachment and filename:
