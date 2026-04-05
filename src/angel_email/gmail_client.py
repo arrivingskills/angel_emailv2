@@ -56,7 +56,26 @@ def list_message_ids(
     max_results: Optional[int] = None,
     q: Optional[str] = None,
 ) -> List[str]:
-    """List message IDs matching given labels and optional Gmail query."""
+    """List message IDs matching given labels and optional Gmail query.
+
+    When multiple label IDs are given, results are unioned across labels.
+    The Gmail API applies AND logic when all IDs are passed together in a
+    single request, so we query each label separately and deduplicate.
+    """
+    if label_ids and len(label_ids) > 1:
+        seen: set = set()
+        result: List[str] = []
+        for lid in label_ids:
+            for mid in list_message_ids(
+                service, label_ids=[lid], max_results=None, q=q
+            ):
+                if mid not in seen:
+                    seen.add(mid)
+                    result.append(mid)
+                    if max_results and len(result) >= max_results:
+                        return result
+        return result
+
     user = "me"
     ids: List[str] = []
     page_token: Optional[str] = None
@@ -92,7 +111,10 @@ def list_message_ids(
 def get_message_raw(service: Resource, msg_id: str) -> bytes:
     """Fetch the raw RFC822 message as bytes (.eml)."""
     resp = (
-        service.users().messages().get(userId="me", id=msg_id, format="raw").execute()
+        service.users()
+        .messages()
+        .get(userId="me", id=msg_id, format="raw")
+        .execute()
     )
     raw_b64 = resp.get("raw", "")
     # Gmail returns base64url encoded string
@@ -202,11 +224,18 @@ def create_label_if_not_exists(service: Resource, label_name: str) -> str:
         "messageListVisibility": "show",
     }
 
-    result = service.users().labels().create(userId="me", body=label_object).execute()
+    result = (
+        service.users()
+        .labels()
+        .create(userId="me", body=label_object)
+        .execute()
+    )
     return result["id"]
 
 
-def add_label_to_message(service: Resource, msg_id: str, label_id: str) -> None:
+def add_label_to_message(
+    service: Resource, msg_id: str, label_id: str
+) -> None:
     """
     Add a label to a Gmail message.
 
