@@ -17,6 +17,7 @@ from angel_email.gmail_client import (
     save_eml,
     save_attachment,
     clear_attachments_dir,
+    cleanup_empty_attachments_dir,
     create_label_if_not_exists,
     add_label_to_message,
 )
@@ -304,6 +305,9 @@ def main(argv: Optional[List[str]] = None) -> None:
                             print(
                                 f"  Warning: Failed to save attachment {attachment['filename']}: {e}"
                             )
+                    # Remove the per-message dir if no attachments were saved
+                    cleanup_empty_attachments_dir(label_dir, mid)
+
                     # Single commit covers all attachment rows for this message.
                     conn.commit()
 

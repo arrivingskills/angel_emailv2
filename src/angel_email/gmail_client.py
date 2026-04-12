@@ -198,7 +198,15 @@ def save_attachment(
         counter += 1
 
     attachment_path.write_bytes(attachment_data)
+
     return attachment_path
+
+
+def cleanup_empty_attachments_dir(out_dir: Path, gmail_id: str) -> None:
+    """Remove the per-message attachments directory if it is empty."""
+    attachments_dir = out_dir / "attachments" / gmail_id
+    if attachments_dir.is_dir() and not any(attachments_dir.iterdir()):
+        attachments_dir.rmdir()
 
 
 def create_label_if_not_exists(service: Resource, label_name: str) -> str:

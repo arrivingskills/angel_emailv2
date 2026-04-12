@@ -109,6 +109,7 @@ def main_page(page: ft.Page) -> None:
     # ── log area ─────────────────────────────────────────────────
     log_col = ft.Column(
         scroll=ft.ScrollMode.AUTO,
+        auto_scroll=True,
         expand=True,
         tight=True,
         spacing=2,
@@ -180,6 +181,18 @@ def main_page(page: ft.Page) -> None:
         log_col.controls.clear()
         page.update()
 
+    def on_save_log(e: ft.ControlEvent) -> None:
+        log_path = Path(emails_dir.value or ".") / "angel_email.log"
+        try:
+            lines = [
+                getattr(ctrl, "value", str(ctrl)) for ctrl in log_col.controls
+            ]
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text("\n".join(lines), encoding="utf-8")
+            _log(page, log_col, f"Log saved to {log_path}")
+        except Exception as ex:
+            _log(page, log_col, f"Failed to save log: {ex}")
+
     def on_backup(e: ft.ControlEvent) -> None:
         def _work() -> None:
             try:
@@ -247,6 +260,14 @@ def main_page(page: ft.Page) -> None:
             padding=ft.padding.symmetric(horizontal=20, vertical=14)
         ),
     )
+    btn_save_log = ft.OutlinedButton(
+        "Save Log",
+        icon=ft.Icons.SAVE_ALT,
+        on_click=on_save_log,
+        style=ft.ButtonStyle(
+            padding=ft.padding.symmetric(horizontal=20, vertical=14)
+        ),
+    )
     btn_backup = ft.OutlinedButton(
         "Backup Data",
         icon=ft.Icons.CLOUD_UPLOAD,
@@ -285,7 +306,8 @@ def main_page(page: ft.Page) -> None:
                 ft.Row([query, max_count, mark_label], spacing=12),
                 backup_dir,
                 ft.Row(
-                    [btn_list, btn_start, btn_backup, btn_clear], spacing=12
+                    [btn_list, btn_start, btn_backup, btn_clear, btn_save_log],
+                    spacing=12,
                 ),
             ],
             spacing=14,
