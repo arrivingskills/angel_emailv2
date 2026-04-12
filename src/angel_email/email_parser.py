@@ -138,7 +138,31 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
     _OUTLOOK_JUNK_PREFIXES = (
         "EML*OECUSTOMPROPERTY",
         "EML*OECUSTOMHTML",
+        "EML*OE",
     )
+
+    # TNEF and other proprietary Outlook MIME types
+    _OUTLOOK_JUNK_CONTENT_TYPES = {
+        "application/ms-tnef",
+        "application/x-ms-tnef",
+        "application/vnd.ms-tnef",
+    }
+
+    # Known Outlook/Exchange junk filenames (exact, case-insensitive)
+    _OUTLOOK_JUNK_FILENAMES = {
+        "WINMAIL.DAT",
+        "WIN.DAT",
+    }
+
+    def _is_outlook_junk(filename: str, content_type: str) -> bool:
+        upper = filename.upper() if filename else ""
+        if any(upper.startswith(pfx) for pfx in _OUTLOOK_JUNK_PREFIXES):
+            return True
+        if upper in _OUTLOOK_JUNK_FILENAMES:
+            return True
+        if content_type.lower() in _OUTLOOK_JUNK_CONTENT_TYPES:
+            return True
+        return False
 
     if msg.is_multipart():
         for part in msg.walk():
@@ -150,10 +174,8 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
             content_disposition = part.get("Content-Disposition", "")
             filename = part.get_filename()
 
-            # Skip Outlook/Exchange internal metadata parts
-            if filename and any(
-                prefix in filename.upper() for prefix in _OUTLOOK_JUNK_PREFIXES
-            ):
+            # Skip Outlook/Exchange proprietary extension data
+            if _is_outlook_junk(filename or "", part.get_content_type()):
                 continue
 
             # Parts with Content-Disposition: attachment or inline with filename
@@ -194,9 +216,7 @@ def extract_attachments(msg: Message) -> List[Dict[str, Any]]:
         content_disposition = msg.get("Content-Disposition", "")
         filename = msg.get_filename()
 
-        if filename and any(
-            prefix in filename.upper() for prefix in _OUTLOOK_JUNK_PREFIXES
-        ):
+        if _is_outlook_junk(filename or "", msg.get_content_type()):
             return attachments
 
         is_attachment = "attachment" in content_disposition.lower() or (
