@@ -18,10 +18,17 @@ from angel_email.gmail_client import (
 )
 
 
-_LOG_STYLE = ft.TextStyle(size=14, color="#0a0a0a")
+_NAVY = "#0D1B3E"
 
-_FIELD_STYLE = ft.TextStyle(size=15, color="#0a0a0a")
-_LABEL_STYLE = ft.TextStyle(size=13, color="#0a0a0a")
+_LOG_STYLE = ft.TextStyle(size=14, color=_NAVY, font_family="Century Gothic")
+
+_FIELD_STYLE = ft.TextStyle(size=16, color=_NAVY, font_family="Century Gothic")
+_LABEL_STYLE = ft.TextStyle(
+    size=18,
+    color=_NAVY,
+    font_family="Century Gothic Bold",
+    weight=ft.FontWeight.W_600,
+)
 
 
 def _log(page: ft.Page, log_col: ft.Column, text: str) -> None:
@@ -49,32 +56,34 @@ class _PageWriter(io.TextIOBase):
 
 def _field(label: str, value: str = "", **kw) -> ft.TextField:
     """Create a consistently-styled text field."""
+    bgcolor = kw.pop("bgcolor", ft.Colors.WHITE)
+    text_style = kw.pop("text_style", _FIELD_STYLE)
     return ft.TextField(
         label=label,
         value=value,
-        text_style=_FIELD_STYLE,
+        text_style=text_style,
         label_style=_LABEL_STYLE,
-        content_padding=ft.padding.symmetric(horizontal=14, vertical=16),
+        content_padding=ft.padding.only(left=14, right=14, top=44, bottom=14),
         border_radius=10,
         border_color=ft.Colors.GREY_700,
         focused_border_color=ft.Colors.INDIGO,
         cursor_color=ft.Colors.INDIGO,
-        bgcolor=ft.Colors.WHITE,
+        bgcolor=bgcolor,
         **kw,
     )
 
 
 def main_page(page: ft.Page) -> None:
     page.title = "Angel Email"
-    page.window.width = 960
-    page.window.height = 760
+    page.window.width = 1104
+    page.window.height = 980
     page.padding = 0
     page.bgcolor = ft.Colors.WHITE
 
     # ── theme ────────────────────────────────────────────────────
     page.theme = ft.Theme(
         color_scheme_seed=ft.Colors.INDIGO,
-        font_family="Segoe UI, Roboto, sans-serif",
+        font_family="Century Gothic Bold",
     )
 
     # ── form fields ──────────────────────────────────────────────
@@ -82,14 +91,35 @@ def main_page(page: ft.Page) -> None:
         "Credentials JSON", str(Path.cwd() / "credentials.json"), expand=True
     )
     token = _field("Token JSON", str(Path.cwd() / "token.json"), expand=True)
-    labels = _field("Labels (comma-separated)", "INBOX", expand=True)
+    labels = _field(
+        "Labels (comma-separated)",
+        "INBOX",
+        expand=True,
+        bgcolor="#F69294",
+        text_style=ft.TextStyle(
+            size=16,
+            color=_NAVY,
+            font_family="Century Gothic Bold",
+            weight=ft.FontWeight.W_700,
+        ),
+    )
     emails_dir = _field("Emails dir", str(Path.cwd() / "emails"), expand=True)
     db_path = _field(
         "DB path", str(Path.cwd() / "emails" / "emails.db"), expand=True
     )
-    query = _field("Gmail query (optional)", expand=True)
+    query = _field(
+        "Gmail query (optional)",
+        expand=True,
+        hint_text="e.g. from:boss@company.com after:2024/01/01 has:attachment",
+        hint_style=ft.TextStyle(italic=True, color=ft.Colors.GREY_500),
+    )
     max_count = _field("Max results", width=150)
-    mark_label = _field("Mark-downloaded label", expand=True)
+    mark_label = _field(
+        "Mark-downloaded label",
+        expand=True,
+        hint_text="e.g. AngelDownloaded",
+        hint_style=ft.TextStyle(italic=True, color=ft.Colors.GREY_500),
+    )
     backup_dir = _field(
         "Backup folder (drive/path)",
         "/mnt/c/Users/angel/Documents/linux_email_backups",
@@ -101,8 +131,8 @@ def main_page(page: ft.Page) -> None:
         "Windows File Explorer tip: after syncing emails, open the 'Emails dir' in Explorer "
         "and you can search using email properties, for example: "
         "subject:invoice from:alice@example.com hasattachment:yes",
-        size=12,
-        color="#1a1a1a",
+        size=15,
+        color="#0D1B3E",
         selectable=True,
     )
 
@@ -285,8 +315,9 @@ def main_page(page: ft.Page) -> None:
                 ft.Text(
                     "Angel Email",
                     theme_style=ft.TextThemeStyle.HEADLINE_SMALL,
-                    color="#0a0a0a",
+                    color="#0D1B3E",
                     weight=ft.FontWeight.W_600,
+                    font_family="Century Gothic Bold",
                 ),
             ],
             spacing=10,
@@ -328,8 +359,9 @@ def main_page(page: ft.Page) -> None:
     log_header = ft.Text(
         "Log Output",
         theme_style=ft.TextThemeStyle.TITLE_SMALL,
-        color="#0a0a0a",
+        color="#0D1B3E",
         weight=ft.FontWeight.W_600,
+        font_family="Century Gothic Bold",
     )
 
     body = ft.Column(

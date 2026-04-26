@@ -184,6 +184,10 @@ def save_attachment(
     attachments_dir = out_dir / "attachments" / gmail_id
     attachments_dir.mkdir(parents=True, exist_ok=True)
 
+    # Strip any path components from the filename so we never try to create
+    # subdirectories that don't exist (e.g. filenames like "subdir/file.pdf").
+    filename = Path(filename).name or "attachment"
+
     # Save the attachment with its original filename
     attachment_path = attachments_dir / filename
 
